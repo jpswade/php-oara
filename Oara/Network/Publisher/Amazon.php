@@ -145,13 +145,13 @@ class Amazon extends \Oara\Network
                         $transaction = Array();
                         $transaction['merchantId'] = 1;
                         $transaction['date'] = $auxDate->format("Y-m-d H:i:s");
-                        if ($transactionExportArray[9] != null) {
+                        if (isset($transactionExportArray[9]) && $transactionExportArray[9] != null) {
                             $transaction['custom_id'] = $transactionExportArray[9];
                         }
 
                         $transaction['status'] = \Oara\Utilities::STATUS_CONFIRMED;
-                        $transaction['amount'] = \Oara\Utilities::parseDouble($transactionExportArray[7]);
-                        $transaction['commission'] = \Oara\Utilities::parseDouble($transactionExportArray[8]);
+                        $transaction['amount'] = isset($transactionExportArray[7]) ? \Oara\Utilities::parseDouble($transactionExportArray[7]) : 0;
+                        $transaction['commission'] = isset($transactionExportArray[8]) ? \Oara\Utilities::parseDouble($transactionExportArray[8]) : 0;
                         $totalTransactions[] = $transaction;
                     }
 
