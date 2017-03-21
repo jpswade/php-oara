@@ -86,6 +86,8 @@ class AffiliateWindow extends \Oara\Network
 
     /**
      * @return bool
+     *
+     * @throws \Exception In case connection is broken.
      */
     public function checkConnection()
     {
