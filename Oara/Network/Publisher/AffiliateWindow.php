@@ -33,7 +33,7 @@ class AffiliateWindow extends \Oara\Network
     /**
      * Soap client.
      */
-    private $_apiClient = null;
+    protected $_apiClient = null;
     private $_exportClient = null;
     private $_pageSize = 100;
     protected $_currency = null;
@@ -91,18 +91,17 @@ class AffiliateWindow extends \Oara\Network
     {
         $connection = false;
         try {
-
             $params = Array();
             $params['sRelationship'] = 'joined';
             $this->_apiClient->getMerchantList($params);
-
             $connection = true;
         } catch (\Exception $e) {
-
+            throw new \Exception($e->getMessage());
         }
         return $connection;
     }
 
+    
     /**
      * @return array
      */
@@ -115,10 +114,50 @@ class AffiliateWindow extends \Oara\Network
         foreach ($merchants as $merchant) {
             if (count($this->_sitesAllowed) == 0 || \in_array($merchant->oPrimaryRegion->sCountryCode, $this->_sitesAllowed)) {
                 $merchantArray = array();
-                $merchantArray["cid"] = $merchant->iId;
+                $merchantArray["unique_id"] = $merchant->iId;
                 $merchantArray["name"] = $merchant->sName;
-                $merchantArray["url"] = $merchant->sDisplayUrl;
+                //$merchantArray["url"] = $merchant->sDisplayUrl;
+                $merchantArray["raw"] = $merchant;
                 $merchantList[] = $merchantArray;
+            }
+        }
+        return $merchantList;
+    }
+
+
+    /**
+     * @return array
+     */
+    public function getCommissionRates()
+    {
+        $merchantList = [];
+        $params = [];
+        $params['sRelationship'] = 'joined';
+        $merchants = $this->_apiClient->getMerchantList($params)->getMerchantListReturn;
+
+        foreach ($merchants as $merchant) {
+            if (count($this->_sitesAllowed) == 0 || \in_array($merchant->oPrimaryRegion->sCountryCode, $this->_sitesAllowed)) {
+
+                // Get rates for each retailer.
+                $rates = $this->_apiClient->getCommissionGroupList(['iMerchantId' => $merchant->iId])->getCommissionGroupListReturn;
+
+                foreach($rates as $rate) {
+                    $merchantArray = array();
+                    $merchantArray["merchant_id"] = $merchant->iId;
+                    $merchantArray["group_id"] = $rate->sCommissionGroupCode;
+                    $merchantArray["group_name"] = $rate->sCommissionGroupName;
+
+                    if ($rate->fPercentage == 0) {
+                        $merchantArray["amount"] = isset($rate->mAmount->dAmount) ?: null; 
+                        $merchantArray["type"] = 'amount';
+                    } else {
+                        $merchantArray["amount"] = $rate->fPercentage;
+                        $merchantArray["type"] = 'percentage';
+                    }
+
+                    $merchantArray["raw"] = $rate;
+                    $merchantList[] = $merchantArray;
+                }
             }
         }
         return $merchantList;
@@ -135,11 +174,12 @@ class AffiliateWindow extends \Oara\Network
         $totalTransactions = array();
 
         $dStartDate = clone $dStartDate;
-        $dStartDate->setTime(0, 0, 0);
+        //$dStartDate->setTime(0, 0, 0);
         $dEndDate = clone $dEndDate;
-        $dEndDate->setTime(23, 59, 59);
+        //$dEndDate->setTime(1, 59, 59);
 
         $params = array();
+        // http://wiki.awin.com/index.php/AS:DateType
         $params['sDateType'] = 'transaction';
         if ($merchantList != null) {
             $merchantIdList = \Oara\Utilities::getMerchantIdMapFromMerchantList($merchantList);
@@ -166,23 +206,53 @@ class AffiliateWindow extends \Oara\Network
                 foreach ($transactionList->getTransactionListReturn as $transactionObject) {
                     if (($transactionObject->sType != 'bonus') || ($transactionObject->sType == 'bonus' && $this->_includeBonus)) {
                         $transaction = Array();
+                        $transaction['raw'] = $transactionObject;
                         $transaction['unique_id'] = $transactionObject->iId;
+                        $transaction['status'] = $transactionObject->sStatus;
                         $transaction['merchantId'] = $transactionObject->iMerchantId;
+                        
+                        // @Todo [Rad] UTC Time. Changed - git not working.
                         $date = new \DateTime($transactionObject->dTransactionDate);
+                        $date->setTimezone(new \DateTimeZone('UTC'));
+                        
                         $transaction['date'] = $date->format("Y-m-d H:i:s");
 
                         if (isset($transactionObject->sClickref) && $transactionObject->sClickref != null) {
                             $transaction['custom_id'] = $transactionObject->sClickref;
                         }
                         $transaction['type'] = $transactionObject->sType;
-                        $transaction['status'] = $transactionObject->sStatus;
                         $transaction['amount'] = $transactionObject->mSaleAmount->dAmount;
                         $transaction['commission'] = $transactionObject->mCommissionAmount->dAmount;
 
+                        // @Todo [Rad] UTC Time. Changed - git not working.
+                        $transactionParts = [];
                         if (isset($transactionObject->aTransactionParts)) {
                             $transactionPart = \current($transactionObject->aTransactionParts);
                             $transaction['currency'] = $transactionPart->mCommissionAmount->sCurrency;
+                            
+                            foreach ($transactionObject->aTransactionParts as $transactionPart) {
+                                if ($transactionPart->sCommissionType == 'amount') {
+                                    $rate = [
+                                        'amount' => $transactionPart->mCommissionAmount->dAmount,
+                                        'type' => $transactionPart->sCommissionType
+                                    ];
+                                } else {
+                                    $rate = [
+                                        'amount' => $transactionPart->iCommission,
+                                        'type' => $transactionPart->sCommissionType
+                                    ];
+                                }
+
+                                $transactionParts[] = [
+                                    'amount' => $transactionPart->mSaleAmount->dAmount,
+                                    'commission' => $transactionPart->mCommissionAmount->dAmount,
+                                    'rate' => $rate,
+                                    'rate_category' => $transactionPart->sCommissionGroupName
+                                ];
+                            }
                         }
+
+                        $transaction['parts'] = $transactionParts;
                         $totalTransactions[] = $transaction;
                     }
                 }
