@@ -175,10 +175,9 @@ class AffiliateWindow extends \Oara\Network
     {
         $totalTransactions = array();
 
+        // Use DateTime object including seconds for surgical API query.
         $dStartDate = clone $dStartDate;
-        //$dStartDate->setTime(0, 0, 0);
         $dEndDate = clone $dEndDate;
-        //$dEndDate->setTime(1, 59, 59);
 
         $params = array();
         // http://wiki.awin.com/index.php/AS:DateType
