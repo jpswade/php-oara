@@ -116,7 +116,6 @@ class AffiliateWindow extends \Oara\Network
                 $merchantArray = array();
                 $merchantArray["unique_id"] = $merchant->iId;
                 $merchantArray["name"] = $merchant->sName;
-                //$merchantArray["url"] = $merchant->sDisplayUrl;
                 $merchantArray["raw"] = $merchant;
                 $merchantList[] = $merchantArray;
             }
@@ -126,6 +125,8 @@ class AffiliateWindow extends \Oara\Network
 
 
     /**
+     * Gets Retailers commission rates.
+     *
      * @return array
      */
     public function getCommissionRates()
@@ -147,11 +148,12 @@ class AffiliateWindow extends \Oara\Network
                     $merchantArray["group_id"] = $rate->sCommissionGroupCode;
                     $merchantArray["group_name"] = $rate->sCommissionGroupName;
 
+                    // Decide which rate we have.
                     if ($rate->fPercentage == 0) {
-                        $merchantArray["amount"] = isset($rate->mAmount->dAmount) ?: null; 
+                        $merchantArray["amount"] = isset($rate->mAmount->dAmount) ?: null;
                         $merchantArray["type"] = 'amount';
                     } else {
-                        $merchantArray["amount"] = $rate->fPercentage;
+                        $merchantArray["amount"] = isset($rate->fPercentage) ?: null;
                         $merchantArray["type"] = 'percentage';
                     }
 
@@ -211,7 +213,7 @@ class AffiliateWindow extends \Oara\Network
                         $transaction['status'] = $transactionObject->sStatus;
                         $transaction['merchantId'] = $transactionObject->iMerchantId;
                         
-                        // @Todo [Rad] UTC Time. Changed - git not working.
+                        // Make sure time is in UTC format.
                         $date = new \DateTime($transactionObject->dTransactionDate);
                         $date->setTimezone(new \DateTimeZone('UTC'));
                         
@@ -224,7 +226,6 @@ class AffiliateWindow extends \Oara\Network
                         $transaction['amount'] = $transactionObject->mSaleAmount->dAmount;
                         $transaction['commission'] = $transactionObject->mCommissionAmount->dAmount;
 
-                        // @Todo [Rad] UTC Time. Changed - git not working.
                         $transactionParts = [];
                         if (isset($transactionObject->aTransactionParts)) {
                             $transactionPart = \current($transactionObject->aTransactionParts);
